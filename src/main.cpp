@@ -1,177 +1,251 @@
 #include "main.h"
-#include "lemlib/api.hpp" // IWYU pragma: keep
+#include "EZ-Template/api.hpp"
+#include "lemlib/api.hpp"
+#include "lemlib/chassis/trackingWheel.hpp"
+#include "pros/adi.hpp"
+#include "pros/imu.hpp"
+#include "pros/llemu.hpp"
+#include "pros/misc.h"
+#include "pros/misc.hpp"
+#include "pros/motors.h"
+#include "pros/motors.hpp"
+#include "pros/rotation.hpp"
+#include "pros/rtos.h"
+#include "pros/rtos.hpp"
+#include "pros/vision.h"
+#include "auton.hpp"
 
-// controller
-pros::Controller controller(pros::E_CONTROLLER_MASTER);
-
-// motor groups
-pros::MotorGroup leftMotors({-5, 4, -3},
-                            pros::MotorGearset::blue); // left motor group - ports 3 (reversed), 4, 5 (reversed)
-pros::MotorGroup rightMotors({6, -9, 7}, pros::MotorGearset::blue); // right motor group - ports 6, 7, 9 (reversed)
-
-// Inertial Sensor on port 10
-pros::Imu imu(10);
-
-// tracking wheels
-// horizontal tracking wheel encoder. Rotation sensor, port 20, not reversed
-pros::Rotation horizontalEnc(20);
-// vertical tracking wheel encoder. Rotation sensor, port 11, reversed
-pros::Rotation verticalEnc(-11);
-// horizontal tracking wheel. 2.75" diameter, 5.75" offset, back of the robot (negative)
-lemlib::TrackingWheel horizontal(&horizontalEnc, lemlib::Omniwheel::NEW_275, -5.75);
-// vertical tracking wheel. 2.75" diameter, 2.5" offset, left of the robot (negative)
-lemlib::TrackingWheel vertical(&verticalEnc, lemlib::Omniwheel::NEW_275, -2.5);
-
-// drivetrain settings
-lemlib::Drivetrain drivetrain(&leftMotors, // left motor group
-                              &rightMotors, // right motor group
-                              10, // 10 inch track width
-                              lemlib::Omniwheel::NEW_4, // using new 4" omnis
-                              360, // drivetrain rpm is 360
-                              2 // horizontal drift is 2. If we had traction wheels, it would have been 8
-);
-
-// lateral motion controller
-lemlib::ControllerSettings linearController(10, // proportional gain (kP)
-                                            0, // integral gain (kI)
-                                            3, // derivative gain (kD)
-                                            3, // anti windup
-                                            1, // small error range, in inches
-                                            100, // small error range timeout, in milliseconds
-                                            3, // large error range, in inches
-                                            500, // large error range timeout, in milliseconds
-                                            20 // maximum acceleration (slew)
-);
-
-// angular motion controller
-lemlib::ControllerSettings angularController(2, // proportional gain (kP)
-                                             0, // integral gain (kI)
-                                             10, // derivative gain (kD)
-                                             3, // anti windup
-                                             1, // small error range, in degrees
-                                             100, // small error range timeout, in milliseconds
-                                             3, // large error range, in degrees
-                                             500, // large error range timeout, in milliseconds
-                                             0 // maximum acceleration (slew)
-);
-
-// sensors for odometry
-lemlib::OdomSensors sensors(&vertical, // vertical tracking wheel
-                            nullptr, // vertical tracking wheel 2, set to nullptr as we don't have a second one
-                            &horizontal, // horizontal tracking wheel
-                            nullptr, // horizontal tracking wheel 2, set to nullptr as we don't have a second one
-                            &imu // inertial sensor
-);
-
-// input curve for throttle input during driver control
-lemlib::ExpoDriveCurve throttleCurve(3, // joystick deadband out of 127
-                                     10, // minimum output where drivetrain will move out of 127
-                                     1.019 // expo curve gain
-);
-
-// input curve for steer input during driver control
-lemlib::ExpoDriveCurve steerCurve(3, // joystick deadband out of 127
-                                  10, // minimum output where drivetrain will move out of 127
-                                  1.019 // expo curve gain
-);
-
-// create the chassis
-lemlib::Chassis chassis(drivetrain, linearController, angularController, sensors, &throttleCurve, &steerCurve);
+// #include "lvgl/lvgl.h"
+#include <string>
 
 /**
- * Runs initialization code. This occurs as soon as the program is started.
+ * A callback function for LLEMU's center button.
  *
- * All other competition modes are blocked by initialize; it is recommended
- * to keep execution time for this mode under a few seconds.
+ * When this callback is fired, it will toggle line 2 of the LCD text between
+ * "I was pressed!" and nothing.
+ */
+void on_center_button() {
+	static bool pressed = false;
+	pressed = !pressed;
+	if (pressed) {
+		pros::lcd::set_text(2, "I was pressed!");
+	} else {
+		pros::lcd::clear_line(2);
+	}
+}
+
+
+void color_sort_red_team() {
+	double colorvalue;
+	double colordistance;
+	while (true) {
+		colorvalue = colorsensor.get_hue();
+		colordistance = colorsensor.get_proximity();
+		pros::lcd::set_text(6, "Ticks: " + std::to_string(colorvalue));
+		pros::lcd::set_text(7, "Newtick: " + std::to_string(colordistance));
+		//int distancevalue = distancesensor.get(); // gets currently measured d1 in mm
+		if (colorvalue >= 200 && colorvalue <= 225) 
+		{
+			pros::delay(22);
+			//pros::lcd::set_text(4, "BLUE RING DETECTED! :(");
+			//pros::delay(5);
+			// int ticks = intake1.get_position();
+			// int newtick = ticks + 5;
+			// while ((newtick - ticks) > 100) 
+			// {
+			// 	setIntake(127);
+			// 	ticks = intake1.get_position();
+			// 	// pros::lcd::set_text(6, "Ticks: " + std::to_string(ticks));
+			// 	// pros::lcd::set_text(7, "Newtick: " + std::to_string(newtick));
+			// 	pros::lcd::set_text(5, "Error: " + std::to_string(newtick - ticks));
+			// 	pros::delay(10);
+			// }
+
+			//pros::lcd::set_text(4, "DONE!");
+			setIntake(-127);
+			pros::delay(180);
+			setIntake(127);
+		}
+	// 	else 
+	// 	{
+	// 		driveIntake();
+	// 	}
+	// 	pros::delay(5);
+	// }
+	}
+}
+
+
+void color_sort_blue_team() {
+	double colorvalue;
+	while (true) {
+		colorvalue = colorsensor.get_hue();
+		int distancevalue = distancesensor.get(); // gets currently measured d1 in mm
+		if (colorvalue >= 0 && colorvalue <= 32) 
+		{
+			pros::delay(30);
+			//pros::lcd::set_text(4, "BLUE RING DETECTED! :(");
+			//pros::delay(5);
+			// int ticks = intake1.get_position();
+			// int newtick = ticks + 5;
+			// pros::lcd::set_text(6, "Ticks: " + std::to_string(ticks));
+			// pros::lcd::set_text(7, "Newtick: " + std::to_string(newtick));
+			// while ((newtick - ticks) > 100) 
+			// {
+			// 	setIntake(127);
+			// 	ticks = intake1.get_position();
+			// 	// pros::lcd::set_text(6, "Ticks: " + std::to_string(ticks));
+			// 	// pros::lcd::set_text(7, "Newtick: " + std::to_string(newtick));
+			// 	pros::lcd::set_text(5, "Error: " + std::to_string(newtick - ticks));
+			// 	pros::delay(10);
+			// }
+
+			//pros::lcd::set_text(4, "DONE!");
+			setIntake(-127);
+			pros::delay(180);
+			setIntake(127);
+		}
+	// 	else 
+	// 	{
+	// 		driveIntake();
+	// 	}
+	// 	pros::delay(5);
+	// }
+}}
+
+/**
+ * Runs initialization code. This occurs as soon as the	 program is started.
+ *
+ * All other competition	 modes are blo	cked by initialize; it is recommende	d
+ * to keep execution t	i
+		if (controller.get_digital_new_press(pros::E_CONTROLLER_DIGITAL_L2))
+    {
+			while (armsensor.get_position() < 3300)
+			{
+				arm.move_velocity(-400);
+				pros::delay(1);
+			}me for this mode under a few seconds.
  */
 void initialize() {
-    pros::lcd::initialize(); // initialize brain screen
-    chassis.calibrate(); // calibrate sensors
+	chassis.calibrate();
+	pros::lcd::set_text(5, "chassis calibrated");
+	pros::lcd::initialize();
+	pros::lcd::set_text(4, "pros initialized");
+	// imu.reset();
+	
 
-    // the default rate is 50. however, if you need to change the rate, you
-    // can do the following.
-    // lemlib::bufferedStdout().setRate(...);
-    // If you use bluetooth or a wired connection, you will want to have a rate of 10ms
+	drive_LB.set_brake_mode(MOTOR_BRAKE_HOLD);
+	drive_LM.set_brake_mode(MOTOR_BRAKE_HOLD);
+	drive_LF.set_brake_mode(MOTOR_BRAKE_HOLD);
 
-    // for more information on how the formatting for the loggers
-    // works, refer to the fmtlib docs
+    drive_RB.set_brake_mode(MOTOR_BRAKE_HOLD);
+	drive_RM.set_brake_mode(MOTOR_BRAKE_HOLD);
+    drive_RF.set_brake_mode(MOTOR_BRAKE_HOLD);
 
-    // thread to for brain screen and position logging
-    pros::Task screenTask([&]() {
-        while (true) {
-            // print robot location to the brain screen
-            pros::lcd::print(0, "X: %f", chassis.getPose().x); // x
-            pros::lcd::print(1, "Y: %f", chassis.getPose().y); // y
-            pros::lcd::print(2, "Theta: %f", chassis.getPose().theta); // heading
-            // log position telemetry
-            lemlib::telemetrySink()->info("Chassis pose: {}", chassis.getPose());
-            // delay to save resources
-            pros::delay(50);
-        }
-    });
+	arm.set_brake_mode(MOTOR_BRAKE_HOLD);
+
+	pros::lcd::register_btn1_cb(on_center_button);
+
+	armsensor.set_position(0);
+	// armsensor.reset_position();
+	//colorsensor.set_led_pwm(80);
+	colorsensor.disable_gesture();
+
+	// lvgl_init();
+	// colorsensor.set_led_pwm(100); // turn on colorsensor LED -- TURN ON for colorsort
+	// pros::Gps gpssensor(1, -1.5, -1.14, 270);
+	gpssensor.initialize_full((chassis.getPose().x)/39.37, (chassis.getPose().y)/39.37, chassis.getPose().theta, 0, 0); //(x from center, y from center, x coord, y coord, heading)
+	// gpssensor.initialize_full(0.176, 0.2, 1,1,0);
+	// gpssensor.set_position((chassis.getPose().x)/39.37, (chassis.getPose().y)/39.37, chassis.getPose().theta); //RMR THE COORDS ARE IN METERS
+
+	// transmitter = new RobotLink(12, "Robot_VAIRC_2055A", pros::E_LINK_TX);
+    receiver = new RobotLink(11, "Robot_VAIRC_2055A", pros::E_LINK_RX);
+
 }
 
 /**
- * Runs while the robot is disabled
+ * Runs while the robot is in the disabled state of Field Management System or
+ * the VEX Competition Switch, following either autonomous or opcontrol. When
+ * the robot is enabled, this task will exit.
  */
 void disabled() {}
 
 /**
- * runs after initialize if the robot is connected to field control
+ * Runs after initialize(), and before autonomous when connected to the Field
+ * Management System or the VEX Competition Switch. This is intended for
+ * competition-specific initialization routines, such as an autonomous selector
+ * on the LCD.
+ *
+ * This task will exit when the robot is enabled and autonomous or opcontrol
+ * starts.
  */
 void competition_initialize() {}
 
-// get a path used for pure pursuit
-// this needs to be put outside a function
-ASSET(example_txt); // '.' replaced with "_" to make c++ happy
-
 /**
- * Runs during auto
+ * Runs the user autonomous code. This function will be started in its own task
+ * with the default priority and stack size whenever the robot is enabled via
+ * the Field Management System or the VEX Competition Switch in the autonomous
+ * mode. Alternatively, this function may be called in initialize or opcontrol
+ * for non-competition testing purposes.
  *
- * This is an example autonomous routine which demonstrates a lot of the features LemLib has to offer
+ * If the robot is disabled or communications is lost, the autonomous task
+ * will be stopped. Re-enabling the robot will restart the task, not re-start it
+ * from where it left off.
  */
 void autonomous() {
-    // Move to x: 20 and y: 15, and face heading 90. Timeout set to 4000 ms
-    chassis.moveToPose(20, 15, 90, 4000);
-    // Move to x: 0 and y: 0 and face heading 270, going backwards. Timeout set to 4000ms
-    chassis.moveToPose(0, 0, 270, 4000, {.forwards = false});
-    // cancel the movement after it has traveled 10 inches
-    chassis.waitUntil(10);
-    chassis.cancelMotion();
-    // Turn to face the point x:45, y:-45. Timeout set to 1000
-    // dont turn faster than 60 (out of a maximum of 127)
-    chassis.turnToPoint(45, -45, 1000, {.maxSpeed = 60});
-    // Turn to face a direction of 90º. Timeout set to 1000
-    // will always be faster than 100 (out of a maximum of 127)
-    // also force it to turn clockwise, the long way around
-    chassis.turnToHeading(90, 1000, {.direction = AngularDirection::CW_CLOCKWISE, .minSpeed = 100});
-    // Follow the path in path.txt. Lookahead at 15, Timeout set to 4000
-    // following the path with the back of the robot (forwards = false)
-    // see line 116 to see how to define a path
-    chassis.follow(example_txt, 15, 4000, false);
-    // wait until the chassis has traveled 10 inches. Otherwise the code directly after
-    // the movement will run immediately
-    // Unless its another movement, in which case it will wait
-    chassis.waitUntil(10);
-    pros::lcd::print(4, "Traveled 10 inches during pure pursuit!");
-    // wait until the movement is done
-    chassis.waitUntilDone();
-    pros::lcd::print(4, "pure pursuit finished!");
+	thiswillwork();
 }
 
 /**
- * Runs in driver control
+ * Runs the operator control code. This function will be started in its own task
+ * with the default priority and stack size whenever the robot is enabled via
+ * the Field Management System or the VEX Competition Switch in the operator
+ * control mode.
+ *
+ * If no competition control is connected, this function will run immediately
+ * following initialize().
+ *
+ * If the robot is disabled or communications is lost, the
+ * operator control task will be stopped. Re-enabling the robot will restart the
+ * task, not resume it from where it left off.
  */
 void opcontrol() {
-    // controller
-    // loop to continuously update motors
-    while (true) {
-        // get joystick positions
-        int leftY = controller.get_analog(pros::E_CONTROLLER_ANALOG_LEFT_Y);
-        int rightX = controller.get_analog(pros::E_CONTROLLER_ANALOG_RIGHT_X);
-        // move the chassis with curvature drive
-        chassis.arcade(leftY, rightX);
-        // delay to save resources
-        pros::delay(10);
-    }
+	pros::lcd::initialize();
+	pros::lcd::register_btn0_cb(on_center_button);
+
+	drive_LB.set_brake_mode(MOTOR_BRAKE_BRAKE);
+	drive_LM.set_brake_mode(MOTOR_BRAKE_BRAKE);
+    drive_LF.set_brake_mode(MOTOR_BRAKE_BRAKE);
+
+    drive_RB.set_brake_mode(MOTOR_BRAKE_BRAKE);
+	drive_RM.set_brake_mode(MOTOR_BRAKE_BRAKE);
+    drive_RF.set_brake_mode(MOTOR_BRAKE_BRAKE);
+	
+	arm.set_brake_mode(MOTOR_BRAKE_HOLD);
+
+	// pros::lcd::set_text(7, std::to_string(armsensor.get_angle()));
+
+	// armsensor.set_position(0);
+	// armsensor.reset_position();
+
+	
+	pros::rtos::Task my_task_2(setArmLoad1);
+	//pros::rtos::Task my_task_3(setArmLoadNew);
+	//pros::rtos::Task my_task(color_sort_blue_team);
+	// pros::rtos::Task my_task(color_sort_red_team);
+
+	// skillsdriver();
+
+	// pros::Task screen_task([&]() {
+    //     while (true) {
+    //         // print robot location to the brain screen
+	// 		pros::lcd::set_text(5, "X: "  +  std::to_string(chassis.getPose().x)); // print the x position
+    //         pros::lcd::set_text(6, "Y: " + std::to_string(chassis.getPose().y)); // print the y position
+    //     	pros::lcd::set_text(7, "Angle: " + std::to_string(chassis.getPose().theta)); // print the heading
+    //         // delay to save resources
+    //         pros::delay(20);
+    //     }
+    // });
+
+	my_opcontrol();
 }
